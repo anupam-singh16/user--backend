@@ -53,6 +53,13 @@ app.post("/api/addUser", async (req, res) => {
     return res.status(400).json({ error: "Name and email are required" });
   }
 
+  const checkQuery = `SELECT * FROM customers WHERE cus_name = $1`;
+  const checkResult = await pool.query(checkQuery, [name]);
+
+  if (checkResult.rows.length > 0) {
+    return res.status(400).json({ message: "User already exists" });
+  }
+
   try {
     const insertQuery = `
       INSERT INTO customers (cus_name, email, address, dob)
@@ -65,6 +72,61 @@ app.post("/api/addUser", async (req, res) => {
     res.json({ resMessage: "User Added", user: result.rows[0] });
   } catch (error) {
     console.error("Insert error:", error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put("/api/updateUser", async (req, res) => {
+  // const { mobile } = req.params;
+  const { mobile, name, email, address, dob } = req.body;
+
+  console.log(mobile, "mobile>>>>>>>>>>>>>>>>>>>>>>");
+
+  if (!name || !email) {
+    return res.status(400).json({ error: "Name and email are required" });
+  }
+
+  try {
+    const checkUser = await pool.query(
+      "SELECT * FROM customers WHERE mobile = $1",
+      [mobile]
+    );
+
+    if (checkUser.rows.length === 0) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    const checkDuplicate = await pool.query(
+      "SELECT * FROM customers WHERE cus_name = $1 AND cus_name != $2",
+      [name, mobile]
+    );
+
+    if (checkDuplicate.rows.length > 0) {
+      return res
+        .status(400)
+        .json({ message: "Another user with this name already exists" });
+    }
+
+    const updateQuery = `
+      UPDATE customers
+      SET cus_name = $1, email = $2, address = $3, dob = $4
+      WHERE mobile = $5
+      RETURNING *
+    `;
+    const result = await pool.query(updateQuery, [
+      name,
+      email,
+      address,
+      dob,
+      mobile,
+    ]);
+
+    res.json({
+      message: "User updated successfully",
+      user: result.rows[0],
+    });
+  } catch (error) {
+    console.error("Update error:", error);
     res.status(500).json({ error: error.message });
   }
 });
